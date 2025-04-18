@@ -1,0 +1,198 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+        .container { max-width: 600px; margin: 20px auto; padding: 15px; }
+        .stats { background: #f0f0f0; padding: 10px; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        .warning { color: red; margin: 15px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 实时人数 -->
+        <div class="stats" id="currentStats">
+            正在加载实时数据...
+        </div>
+
+        <!-- 登记表单 -->
+        <h2 id="locationTitle"></h2>
+        <form onsubmit="submitForm(event)">
+            <div>
+                <label>姓名：</label>
+                <input type="text" name="name" required>
+            </div>
+            <div>
+                <label>工号：</label>
+                <input type="text" name="employee_id" required>
+            </div>
+            <div>
+                <label>事由：</label>
+                <select name="purpose">
+                    <option value="作业">作业</option>
+                    <option value="检查">检查</option>
+                    <option value="参观">参观</option>
+                    <option value="其他">其他</option>
+                </select>
+            </div>
+            <button type="submit">登记</button>
+        </form>
+
+        <!-- 安全提示 -->
+        <div class="warning">
+            <h3>安全提示</h3>
+            <ol>
+                <li>必须静电消除</li>
+                <li>非防爆手机不得携带入内</li>
+                <li>区域内禁止烟火</li>
+                <li>必须携带相应报警仪</li>
+                <li>外来人员请在管理人员带领下进入</li>
+            </ol>
+        </div>
+
+        <!-- 进出记录表格 -->
+        <table id="recordsTable">
+            <thead>
+                <tr>
+                    <th>姓名</th>
+                    <th>事由</th>
+                    <th>进入时间</th>
+                    <th>持续时间</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+<script>
+// LeanCloud配置
+const APP_ID = '2ZmC6sqLRb9RZu5esRlf0Rtg-gzGzoHsz';
+const APP_KEY = '4MOhNRmTw2JsXaJTTr2BzjLc';
+const CLASS_NAME = 'AccessRecord';
+
+// 全局参数
+let currentLocation = '';
+let currentDirection = '';
+
+// 初始化页面
+document.addEventListener('DOMContentLoaded', () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    currentLocation = decodeURIComponent(urlParams.get('location'));
+    currentDirection = urlParams.get('direction');
+    
+    document.getElementById('locationTitle').innerText = 
+        `${currentLocation} - ${currentDirection === 'in' ? '进入' : '离开'}登记`;
+    
+    loadRealTimeData();
+    setInterval(loadRealTimeData, 5000); // 5秒刷新
+});
+
+// 加载实时数据
+async function loadRealTimeData() {
+    try {
+        // 获取当前区域所有记录
+        const res = await fetch(`https://${APP_ID}.api.lncldglobal.com/1.1/classes/${CLASS_NAME}?where=${JSON.stringify({location: currentLocation})}`, {
+            headers: {
+                'X-LC-Id': APP_ID,
+                'X-LC-Key': APP_KEY
+            }
+        });
+        
+        const data = await res.json();
+        
+        // 计算站区人员
+        const activeRecords = calculateActiveRecords(data.results);
+        
+        // 更新统计
+        document.getElementById('currentStats').innerHTML = `
+            当前站区人数：${activeRecords.length}人
+        `;
+        
+        // 更新表格
+        updateRecordsTable(activeRecords);
+    } catch (error) {
+        console.error('数据加载失败:', error);
+    }
+}
+
+// 计算有效记录
+function calculateActiveRecords(records) {
+    const statusMap = new Map();
+    
+    records.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt));
+    
+    records.forEach(record => {
+        const key = record.employee_id;
+        if (record.direction === 'in') {
+            statusMap.set(key, record);
+        } else {
+            statusMap.delete(key);
+        }
+    });
+    
+    return Array.from(statusMap.values());
+}
+
+// 更新表格
+function updateRecordsTable(records) {
+    const tbody = document.querySelector('#recordsTable tbody');
+    tbody.innerHTML = records.map(record => `
+        <tr>
+            <td>${record.name}</td>
+            <td>${record.purpose}</td>
+            <td>${formatTime(record.createdAt)}</td>
+            <td>${calculateDuration(record.createdAt)}</td>
+        </tr>
+    `).join('');
+}
+
+// 时间格式化
+function formatTime(isoTime) {
+    const date = new Date(isoTime);
+    return `${date.getHours()}:${date.getMinutes().toString().padStart(2,'0')}`;
+}
+
+// 计算持续时间
+function calculateDuration(isoTime) {
+    const mins = Math.floor((new Date() - new Date(isoTime)) / 60000);
+    return `${Math.floor(mins)}分钟`;
+}
+
+// 提交表单
+async function submitForm(e) {
+    e.preventDefault();
+    
+    const formData = {
+        name: e.target.name.value,
+        employee_id: e.target.employee_id.value,
+        purpose: e.target.purpose.value,
+        location: currentLocation,
+        direction: currentDirection,
+        // 自动添加时间戳
+        timestamp: { "__type": "Date", "iso": new Date().toISOString() }
+    };
+
+    try {
+        await fetch(`https://${APP_ID}.api.lncldglobal.com/1.1/classes/${CLASS_NAME}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-LC-Id': APP_ID,
+                'X-LC-Key': APP_KEY
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        alert('登记成功！');
+        e.target.reset();
+        loadRealTimeData(); // 立即刷新数据
+    } catch (error) {
+        alert('登记失败，请重试！');
+    }
+}
+</script>
+</body>
+</html>
