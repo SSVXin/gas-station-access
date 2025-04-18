@@ -1,0 +1,56 @@
+name: Daily Backup
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # 每天UTC时间2点运行（北京时间10点）
+  workflow_dispatch:     # 允许手动触发
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Setup Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install leancloud-sdk
+
+    - name: Export Data
+      env:
+        LC_APP_ID: ${{ secrets.LC_APP_ID }}
+        LC_APP_KEY: ${{ secrets.LC_APP_KEY }}
+      run: |
+        python <<EOF
+        import leancloud
+        from datetime import datetime
+        
+        leancloud.init(env.LC_APP_ID, env.LC_APP_KEY)
+        
+        # 导出数据
+        data = leancloud.Query("AccessRecord").find()
+        csv_content = "姓名,工号,事由,地点,方向,时间\n"
+        for record in data:
+            csv_content += f'"{record.get("name")}",{record.get("employee_id")},{record.get("purpose")},'
+            csv_content += f'"{record.get("location")}",{record.get("direction")},{record.created_at.isoformat()}\n'
+        
+        # 保存文件
+        filename = f"backup_{datetime.now().strftime('%Y%m%d')}.csv"
+        with open(filename, 'w', encoding='utf-8-sig') as f:
+            f.write(csv_content)
+        EOF
+
+    - name: Commit Backup
+      run: |
+        git config --global user.name "GitHub Actions"
+        git config --global user.email "actions@github.com"
+        git add backup_*.csv
+        git commit -m "Auto backup $(date +'%Y-%m-%d')"
+        git push
