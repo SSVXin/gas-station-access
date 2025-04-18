@@ -82,8 +82,8 @@
 // LeanCloud配置
 const APP_ID = '2ZmC6sqLRb9RZu5esRlf0Rtg-gzGzoHsz';
 const APP_KEY = '4MOhNRmTw2JsXaJTTr2BzjLc';
+const API_BASE = `https://${APP_ID.slice(0,8).toLowerCase()}.api.lncldapi.com`; // ++++ 国内版API地址 ++++
 const CLASS_NAME = 'AccessRecord';
-const API_BASE = `https://${APP_ID.replace('-','').substring(0,8)}.api.lncldapi.com`; // 修正API地址
 
 // 全局参数
 let currentLocation = '';
@@ -113,26 +113,54 @@ document.addEventListener('DOMContentLoaded', () => {
 // 加载实时数据
 async function loadRealTimeData() {
   try {
-    const response = await fetch(`${API_BASE}/1.1/classes/${CLASS_NAME}?where=${encodeURIComponent(JSON.stringify({
-      location: currentLocation
-    }))}`, {
+    const query = encodeURIComponent(JSON.stringify({
+      location: currentLocation,
+      // 添加时间范围限制（示例：最近24小时）
+      createdAt: {
+        "$gte": { "__type": "Date", "iso": new Date(Date.now()-86400000).toISOString() }
+      }
+    }));
+
+    // ++++ 添加请求超时机制 ++++
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    const response = await fetch(`${API_BASE}/1.1/classes/${CLASS_NAME}?where=${query}`, {
       headers: {
         'X-LC-Id': APP_ID,
         'X-LC-Key': APP_KEY
-      }
+      },
+      signal: controller.signal // ++++ 绑定中止控制器 ++++
     });
+    clearTimeout(timeoutId);
 
-    // 新增：响应状态检查
+    // ++++ 增加响应状态检查 ++++
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(`[${response.status}] ${error.error}`);
+      const errorText = await response.text();
+      throw new Error(`HTTP错误! 状态码: ${response.status}, 详情: ${errorText}`);
     }
 
     const data = await response.json();
-    // ...后续处理保持不变
+    const activeRecords = calculateActiveRecords(data.results);
+    
+    // 更新页面显示...
+    
   } catch (error) {
-    console.error('数据加载失败:', error);
-    document.getElementById('currentStats').innerHTML = `数据加载失败: ${error.message}`;
+    // ++++ 细化错误提示 ++++
+    let errorMsg = '数据加载失败: ';
+    if (error.name === 'AbortError') {
+      errorMsg += '请求超时，请检查网络连接';
+    } else if (error.message.includes('Failed to fetch')) {
+      errorMsg += `无法连接到服务器，请检查：
+        1. 是否处于公司内网
+        2. 是否启用VPN
+        3. 域名 ${API_BASE} 是否可访问`;
+    } else {
+      errorMsg += error.message;
+    }
+    
+    document.getElementById('currentStats').innerHTML = errorMsg;
+    console.error('完整错误信息:', error);
   }
 }
 
@@ -263,3 +291,22 @@ document.addEventListener('DOMContentLoaded', () => {
     window.location.reload();
   }
   </script>
+
+// 在页面底部添加测试按钮
+<button onclick="testAPIConnection()">测试API连通性</button>
+
+<script>
+async function testAPIConnection() {
+  try {
+    const res = await fetch(`${API_BASE}/1.1/classes/${CLASS_NAME}?limit=0`, {
+      headers: {
+        'X-LC-Id': APP_ID,
+        'X-LC-Key': APP_KEY
+      }
+    });
+    alert(`API连接正常！响应状态码: ${res.status}`);
+  } catch (error) {
+    alert(`连接失败: ${error.message}`);
+  }
+}
+</script>
