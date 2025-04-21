@@ -75,7 +75,7 @@
                 <label>工号：</label>
                 <input type="text" name="employee_id" required>
             </div>
-            <div>
+            <div class="purpose-selection">
                 <label>事由：</label>
                 <select name="purpose">
                     <option value="作业">作业</option>
@@ -83,6 +83,12 @@
                     <option value="参观">参观</option>
                     <option value="其他">其他</option>
                 </select>
+            </div>
+            <div class="purpose-display" style="display:none;">
+                <label>事由：</label>
+                <span id="purposeDisplay" style="font-weight:bold;"></span>
+                <!-- 隐藏的事由字段，在表单提交时使用 -->
+                <input type="hidden" name="purpose" value="其他">
             </div>
             <button type="submit">登记</button>
         </form>
@@ -133,7 +139,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelector('[name="employee_id"]').value = savedInfo.employee_id || '';
     }
 
-
     const urlParams = new URLSearchParams(window.location.search);
     currentLocation = decodeURIComponent(urlParams.get('location'));
     currentDirection = urlParams.get('direction');
@@ -141,9 +146,52 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('locationTitle').innerText = 
         `${currentLocation} - ${currentDirection === 'in' ? '进入' : '离开'}登记`;
     
+    // 如果是出门记录，查询对应的进门事由并预填充
+    if (currentDirection === 'out' && savedInfo && savedInfo.id) {
+        document.querySelector('.purpose-selection').style.display = 'none'; // 隐藏事由选择
+        document.querySelector('.purpose-display').style.display = 'block'; // 显示事由文本
+        fetchAndSetPurpose(savedInfo.id, currentLocation);
+    }
+    
     loadRealTimeData();
     setInterval(loadRealTimeData, 5000); // 5秒刷新
 });
+
+// 获取并设置出门事由
+async function fetchAndSetPurpose(employeeId, location) {
+    try {
+        // 查询该用户对该门禁的最近一次进入记录
+        const query = encodeURIComponent(JSON.stringify({
+            employee_id: employeeId,
+            location: location,
+            direction: 'in'
+        }));
+        
+        const response = await fetch(`${API_BASE}/1.1/classes/AccessRecord?where=${query}&order=-createdAt&limit=1`, {
+            headers: { 'X-LC-Id': APP_ID, 'X-LC-Key': `${APP_KEY},master` }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            // 如果找到进入记录，使用进入记录的事由
+            if (data.results && data.results.length > 0) {
+                const purpose = data.results[0].purpose || '其他';
+                // 设置隐藏的事由输入框的值
+                document.querySelector('[name="purpose"]').value = purpose;
+                // 显示事由文本
+                document.getElementById('purposeDisplay').textContent = purpose;
+            } else {
+                document.querySelector('.purpose-selection').style.display = 'block'; // 找不到记录时显示选择
+                document.querySelector('.purpose-display').style.display = 'none';
+            }
+        }
+    } catch (error) {
+        console.error('获取进门记录失败:', error);
+        // 错误时显示选择框
+        document.querySelector('.purpose-selection').style.display = 'block';
+        document.querySelector('.purpose-display').style.display = 'none';
+    }
+}
 
 // 加载实时数据
 async function loadRealTimeData() {
