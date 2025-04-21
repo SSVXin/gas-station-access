@@ -6,14 +6,6 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <script>
-    // 微信环境特殊处理
-    if(/MicroMessenger/i.test(navigator.userAgent)) {
-        window.addEventListener('load', function() {
-        alert("建议点击右上角···，选择'在浏览器打开'以正常使用");
-        });
-    }
-    </script>
     <style>
         .container { max-width: 600px; margin: 20px auto; padding: 15px; }
         .stats { background: #f0f0f0; padding: 10px; margin-bottom: 20px; }
@@ -276,22 +268,3 @@ document.addEventListener('DOMContentLoaded', () => {
     window.location.reload();
   }
   </script>
-
-// 在页面底部添加测试按钮
-<button onclick="testAPIConnection()">测试API连通性</button>
-
-<script>
-async function testAPIConnection() {
-  try {
-    const res = await fetch(`${API_BASE}/1.1/classes/${CLASS_NAME}?limit=0`, {
-      headers: {
-        'X-LC-Id': APP_ID,
-        'X-LC-Key': APP_KEY
-      }
-    });
-    alert(`API连接正常！响应状态码: ${res.status}`);
-  } catch (error) {
-    alert(`连接失败: ${error.message}`);
-  }
-}
-</script>
