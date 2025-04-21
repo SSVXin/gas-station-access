@@ -81,9 +81,7 @@
 
 <script>
 // LeanCloud配置
-const APP_ID = '2ZmC6sqLRb9RZu5esRlf0Rtg-gzGzoHsz';
-const APP_KEY = '4MOhNRmTw2JsXaJTTr2BzjLc';
-const API_BASE = `https://${APP_ID.slice(0,8).toLowerCase()}.api.lncldapi.com`; // ++++ 国内版API地址 ++++
+const API_BASE = `https://${CONFIG.APP_ID.replace(/-/g, '').substr(0,8)}.api.lncldapi.com`;
 const CLASS_NAME = 'AccessRecord';
 
 // 全局参数
@@ -124,7 +122,7 @@ async function loadRealTimeData() {
 
     // ++++ 添加请求超时机制 ++++
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     const response = await fetch(`${API_BASE}/1.1/classes/${CLASS_NAME}?where=${query}`, {
       headers: {
@@ -148,20 +146,12 @@ async function loadRealTimeData() {
     
   } catch (error) {
     // ++++ 细化错误提示 ++++
-    let errorMsg = '数据加载失败: ';
-    if (error.name === 'AbortError') {
-      errorMsg += '请求超时，请检查网络连接';
-    } else if (error.message.includes('Failed to fetch')) {
-      errorMsg += `无法连接到服务器，请检查：
-        1. 是否处于公司内网
-        2. 是否启用VPN
-        3. 域名 ${API_BASE} 是否可访问`;
+    if (retry < 2) { // 最多重试2次
+      console.log(`第${retry+1}次重试...`);
+      await loadRealTimeData(retry + 1);
     } else {
-      errorMsg += error.message;
+      document.getElementById('currentStats').innerHTML = errorMsg;
     }
-    
-    document.getElementById('currentStats').innerHTML = errorMsg;
-    console.error('完整错误信息:', error);
   }
 }
 
