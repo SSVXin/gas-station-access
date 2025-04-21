@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>区域出入管理系统</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            background-color: #f8f9fa;
+        }
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .card {
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .login-card {
+            max-width: 400px;
+            margin: 100px auto;
+        }
+        .btn-primary {
+            background-color: #0d6efd;
+        }
+        .nav-tabs .nav-link.active {
+            font-weight: bold;
+            color: #0d6efd;
+        }
+        .date-filter {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .date-filter label {
+            margin-bottom: 0;
+            white-space: nowrap;
+        }
+        .modal-backdrop {
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+        #manualModal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            width: 90%;
+            max-width: 500px;
+            margin: 100px auto;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <!-- 登录部分 -->
+    <div id="loginBox" class="login-card">
+        <div class="card">
+            <div class="card-body p-4">
+                <h3 class="text-center mb-4">管理员登录</h3>
+                <div class="mb-3">
+                    <label for="inputPwd" class="form-label">管理员密码</label>
+                    <input type="password" class="form-control" id="inputPwd" placeholder="请输入密码">
+                </div>
+                <button class="btn btn-primary w-100" onclick="checkPassword()">登录</button>
+                <p id="loginError" class="text-danger text-center mt-3"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主要内容部分，初始隐藏 -->
+    <div id="contentDiv" class="main-container d-none">
+        <h2 class="text-center mb-4">区域出入管理系统</h2>
+        
+        <!-- 导航标签页 -->
+        <ul class="nav nav-tabs mb-4" id="adminTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="records-tab" data-bs-toggle="tab" data-bs-target="#records" type="button" role="tab">进出记录管理</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="supplementary-tab" data-bs-toggle="tab" data-bs-target="#supplementary" type="button" role="tab">补登记管理</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="system-tab" data-bs-toggle="tab" data-bs-target="#system" type="button" role="tab">系统管理</button>
+            </li>
+        </ul>
+        
+        <!-- 标签页内容 -->
+        <div class="tab-content" id="adminTabContent">
+            <!-- 进出记录管理 -->
+            <div class="tab-pane fade show active" id="records" role="tabpanel">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-9">
+                                <div class="date-filter">
+                                    <label for="startDate">开始日期:</label>
+                                    <input type="text" class="form-control" id="startDate" placeholder="选择开始日期">
+                                    
+                                    <label for="endDate">结束日期:</label>
+                                    <input type="text" class="form-control" id="endDate" placeholder="选择结束日期">
+                                    
+                                    <select id="locationFilter" class="form-select">
+                                        <option value="">全部区域</option>
+                                        <!-- 自动填充选项 -->
+                                    </select>
+                                    
+                                    <button class="btn btn-primary" onclick="loadData()">查询</button>
+                                </div>
+                            </div>
+                            <div class="col-md-3 text-end">
+                                <button class="btn btn-success" onclick="exportCSV()">导出CSV</button>
+                            </div>
+                        </div>
+                        
+                        <div class="table-responsive">
+                            <table id="dataTable" class="table table-striped table-hover">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>姓名</th>
+                                        <th>工号</th>
+                                        <th>事由</th>
+                                        <th>地点</th>
+                                        <th>进入时间</th>
+                                        <th>离开时间</th>
+                                        <th>停留时长</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 补登记管理 -->
+            <div class="tab-pane fade" id="supplementary" role="tabpanel">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-12 mb-3">
+                                <h5>原始记录查询</h5>
+                                <div class="date-filter">
+                                    <label for="queryStartDate">开始日期:</label>
+                                    <input type="text" class="form-control" id="queryStartDate" placeholder="选择开始日期">
+                                    
+                                    <label for="queryEndDate">结束日期:</label>
+                                    <input type="text" class="form-control" id="queryEndDate" placeholder="选择结束日期">
+                                    
+                                    <button class="btn btn-primary" onclick="loadRecords()">查询原始记录</button>
+                                    <button class="btn btn-warning" onclick="showManualForm()">出区域补登记</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="table-responsive">
+                            <table id="recordsTable" class="table table-striped table-hover">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>姓名</th>
+                                        <th>工号</th>
+                                        <th>事由</th>
+                                        <th>门禁位置</th>
+                                        <th>进出方向</th>
+                                        <th>时间</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 系统管理 -->
+            <div class="tab-pane fade" id="system" role="tabpanel">
+                <div class="card">
+                    <div class="card-body">
+                        <h5>数据维护</h5>
+                        <div class="mb-3">
+                            <button class="btn btn-danger" onclick="cleanOldData()">清理3个月前数据</button>
+                            <p class="text-muted mt-2">此操作将永久删除3个月前的所有数据记录，请谨慎操作。</p>
+                        </div>
+                        
+                        <hr>
+                        
+                        <h5>安全设置</h5>
+                        <div class="mb-3">
+                            <button class="btn btn-secondary" onclick="logoutAdmin()">退出登录</button>
+                            <p class="text-muted mt-2">退出后需要重新输入密码才能访问管理界面。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 补登记模态框 -->
+    <div id="manualModal">
+        <div class="modal-content">
+            <h4 class="mb-3">手动补登离开记录</h4>
+            <div class="mb-3">
+                <label for="manual_id" class="form-label">工号</label>
+                <input type="text" class="form-control" id="manual_id">
+            </div>
+            <div class="mb-3">
+                <label for="manual_loc" class="form-label">门禁位置</label>
+                <select id="manual_loc" class="form-select">
+                    <!-- 通过JS动态填充 -->
+                </select>
+            </div>
+            <div class="d-flex justify-content-end gap-2">
+                <button class="btn btn-secondary" onclick="closeModal()">取消</button>
+                <button class="btn btn-primary" onclick="submitManual()">提交</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 引入JS库 -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/zh.js"></script>
+    
+    <script>
+    // LeanCloud配置
+    const APP_ID = '2ZmC6sqLRb9RZu5esRlf0Rtg-gzGzoHsz';
+    const APP_KEY = '4MOhNRmTw2JsXaJTTr2BzjLc';
+    const API_BASE = `https://2zmc6sql.lc-cn-n1-shared.com`;
+    
+    // 管理员密码 (注意：在生产环境中应该考虑更安全的方式)
+    const ADMIN_PASSWORD = 'dlxj321';
+    
+    // 初始化日期选择器
+    document.addEventListener('DOMContentLoaded', () => {
+        initDatePickers();
+        initLocations();
+        checkLoginStatus();
+        
+        // 使所有标签页正确工作
+        const triggerTabList = [].slice.call(document.querySelectorAll('#adminTabs button'));
+        triggerTabList.forEach(function (triggerEl) {
+            new bootstrap.Tab(triggerEl);
+        });
+    });
+    
+    // 初始化日期选择器
+    function initDatePickers() {
+        const dateConfig = {
+            locale: "zh",
+            dateFormat: "Y-m-d",
+            altInput: true,
+            altFormat: "Y年m月d日",
+            maxDate: "today"
+        };
+        
+        flatpickr("#startDate", dateConfig);
+        flatpickr("#endDate", dateConfig);
+        flatpickr("#queryStartDate", dateConfig);
+        flatpickr("#queryEndDate", dateConfig);
+    }
+    
+    // 登录相关函数
+    function checkPassword() {
+        const input = document.getElementById('inputPwd').value;
+        if(input === ADMIN_PASSWORD) {
+            document.getElementById('loginBox').style.display = 'none';
+            document.getElementById('contentDiv').classList.remove('d-none');
+            
+            // 使用sessionStorage而不是localStorage，这样关闭浏览器后自动失效
+            sessionStorage.setItem('adminAuth', 'true');
+        } else {
+            document.getElementById('loginError').innerText = '密码错误，请重试';
+        }
+    }
+    
+    function checkLoginStatus() {
+        // 使用sessionStorage检查登录状态，关闭浏览器后自动失效
+        if(sessionStorage.getItem('adminAuth') === 'true') {
+            document.getElementById('loginBox').style.display = 'none';
+            document.getElementById('contentDiv').classList.remove('d-none');
+        }
+    }
+    
+    function logoutAdmin() {
+        sessionStorage.removeItem('adminAuth');
+        document.getElementById('loginBox').style.display = 'block';
+        document.getElementById('contentDiv').classList.add('d-none');
+    }
+    
+    // 初始化地点选项
+    function initLocations() {
+        const locations = [
+            "能环部能中1#煤气站",
+            "能环部能中2#煤气站",
+            "能环部能中3#煤气站",
+            "能环部能中4#煤气站",
+            "能环部能中5#煤气站",
+            "能环部能中球罐区",
+            "能环部能中放散塔",
+        ];
+        
+        // 初始化主查询的位置筛选器
+        const locationFilter = document.getElementById('locationFilter');
+        locationFilter.innerHTML = '<option value="">全部区域</option>';
+        
+        // 初始化补登记的位置选择器
+        const manualLoc = document.getElementById('manual_loc');
+        manualLoc.innerHTML = '';
+        
+        locations.forEach(loc => {
+            const option1 = document.createElement('option');
+            option1.value = loc;
+            option1.text = loc;
+            locationFilter.appendChild(option1);
+            
+            const option2 = document.createElement('option');
+            option2.value = loc;
+            option2.text = loc;
+            manualLoc.appendChild(option2);
+        });
+    }
+    
+    // ========== 记录管理功能 ==========
+    
+    // 加载汇总数据
+    async function loadData() {
+        const where = {};
+        
+        // 构建查询条件
+        const location = document.getElementById('locationFilter').value;
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+        
+        if (location) where.location = location;
+        if (startDate || endDate) {
+            where.createdAt = {};
+            if (startDate) where.createdAt.$gte = { "__type": "Date", "iso": startDate + "T00:00:00.000Z" };
+            if (endDate) where.createdAt.$lte = { "__type": "Date", "iso": endDate + "T23:59:59.999Z" };
+        }
+
+        try {
+            const res = await fetch(`${API_BASE}/1.1/classes/AccessRecord?where=${encodeURIComponent(JSON.stringify(where))}&order=-createdAt&limit=1000`, {
+                headers: { 'X-LC-Id': APP_ID, 'X-LC-Key': `${APP_KEY},master` }
+            });
+            
+            const data = await res.json();
+            renderTable(data.results);
+        } catch (error) {
+            console.error('数据加载失败:', error);
+            alert('数据加载失败: ' + error.message);
+        }
+    }
+    
+    // 渲染汇总表格
+    function renderTable(records) {
+        const grouped = groupRecords(records);
+        const tbody = document.querySelector('#dataTable tbody');
+        tbody.innerHTML = Object.values(grouped).map(record => `
+            <tr>
+                <td>${record.name || '-'}</td>
+                <td>${record.employee_id || '-'}</td>
+                <td>${record.purpose || '-'}</td>
+                <td>${record.location || '-'}</td>
+                <td>${formatDateTime(record.inTime)}</td>
+                <td>${record.outTime ? formatDateTime(record.outTime) : '未离开'}</td>
+                <td>${record.duration || '进行中'}</td>
+            </tr>
+        `).join('');
+    }
+    
+    // 数据分组（进出匹配）
+    function groupRecords(records) {
+        const map = {};
+        records.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt));
+        
+        records.forEach(r => {
+            const key = r.employee_id + r.location;
+            if (r.direction === 'in') {
+                map[key] = {
+                    ...r,
+                    inTime: r.createdAt,
+                    outTime: null,
+                    duration: null
+                };
+            } else if (r.direction === 'out') {
+                if (map[key]) {
+                    map[key].outTime = r.createdAt;
+                    map[key].duration = calculateDuration(map[key].inTime, r.createdAt);
+                }
+            }
+        });
+        
+        return map;
+    }
+    
+    // 导出CSV
+    function exportCSV() {
+        // 获取表格数据
+        const table = document.getElementById('dataTable');
+        const rows = table.querySelectorAll('tr');
+        
+        if (rows.length <= 1) {
+            alert('没有数据可导出');
+            return;
+        }
+        
+        let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; // 添加BOM以支持中文
+        
+        // 添加表头
+        const headerRow = Array.from(rows[0].querySelectorAll('th'))
+            .map(th => `"${th.textContent}"`)
+            .join(',');
+        csvContent += headerRow + '\r\n';
+        
+        // 添加数据行
+        for (let i = 1; i < rows.length; i++) {
+            const row = rows[i];
+            const rowData = Array.from(row.querySelectorAll('td'))
+                .map(td => `"${td.textContent}"`)
+                .join(',');
+            csvContent += rowData + '\r\n';
+        }
+        
+        // 创建下载链接
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `出入记录_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+    
+    // ========== 补登记功能 ==========
+    
+    // 加载原始记录
+    async function loadRecords() {
+        const startDate = document.getElementById('queryStartDate').value;
+        const endDate = document.getElementById('queryEndDate').value;
+        
+        const where = {};
+        if(startDate || endDate) {
+            where.createdAt = {};
+            if(startDate) where.createdAt.$gte = { "__type": "Date", "iso": startDate + "T00:00:00.000Z" };
+            if(endDate) where.createdAt.$lte = { "__type": "Date", "iso": endDate + "T23:59:59.999Z" };
+        }
+
+        try {
+            const res = await fetch(`${API_BASE}/1.1/classes/AccessRecord?where=${encodeURIComponent(JSON.stringify(where))}&order=-createdAt&limit=1000`, {
+                headers: { 'X-LC-Id': APP_ID, 'X-LC-Key': `${APP_KEY},master` }
+            });
+            
+            const data = await res.json();
+            renderRecordsTable(data.results);
+        } catch (error) {
+            console.error('查询失败:', error);
+            alert('查询失败: ' + error.message);
+        }
+    }
+    
+    // 渲染原始记录表格
+    function renderRecordsTable(records) {
+        const tbody = document.querySelector('#recordsTable tbody');
+        tbody.innerHTML = records.map(record => `
+            <tr>
+                <td>${record.name || '-'}</td>
+                <td>${record.employee_id || '-'}</td>
+                <td>${record.purpose || '-'}</td>
+                <td>${record.location || '-'}</td>
+                <td>${record.direction === 'in' ? '进入' : '离开'}</td>
+                <td>${formatDateTime(record.createdAt)}</td>
+            </tr>
+        `).join('');
+    }
+    
+    // 手动补登功能
+    async function submitManual() {
+        const employeeId = document.getElementById('manual_id').value.trim();
+        const location = document.getElementById('manual_loc').value;
+        
+        if (!employeeId) {
+            alert('请输入工号');
+            return;
+        }
+
+        // 验证是否有进入记录
+        try {
+            const checkRes = await fetch(`${API_BASE}/1.1/classes/AccessRecord?where=${encodeURIComponent(JSON.stringify({
+                employee_id: employeeId,
+                location: location,
+                direction: "in"
+            }))}&order=-createdAt&limit=1`, {
+                headers: { 'X-LC-Id': APP_ID, 'X-LC-Key': `${APP_KEY},master` }
+            });
+            
+            const checkData = await checkRes.json();
+            if(checkData.results.length === 0) {
+                alert('未找到对应的进入记录，请先确认人员已进入该区域');
+                return;
+            }
+            
+            // 使用最近的进入记录中的姓名
+            const personName = checkData.results[0].name || "未知";
+            
+            // 提交离开记录
+            const submitRes = await fetch(`${API_BASE}/1.1/classes/AccessRecord`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-LC-Id': APP_ID,
+                    'X-LC-Key': `${APP_KEY},master`
+                },
+                body: JSON.stringify({
+                    employee_id: employeeId,
+                    location: location,
+                    direction: "out",
+                    purpose: "管理员补登",
+                    name: personName + "(管理员补登)"
+                })
+            });
+            
+            if (submitRes.ok) {
+                alert('补登成功！');
+                closeModal();
+                loadRecords(); // 刷新记录表
+            } else {
+                const errorData = await submitRes.json();
+                throw new Error(`API错误: ${errorData.code} - ${errorData.error}`);
+            }
+            
+        } catch (error) {
+            console.error('补登失败:', error);
+            alert('补登失败: ' + error.message);
+        }
+    }
+    
+    // 弹窗控制
+    function showManualForm() {
+        document.getElementById('manualModal').style.display = 'block';
+    }
+    
+    function closeModal() {
+        document.getElementById('manualModal').style.display = 'none';
+    }
+    
+    // ========== 系统管理功能 ==========
+    
+    // 清理旧数据
+    async function cleanOldData() {
+        const confirm = window.confirm('确定要删除3个月前的数据吗？此操作不可恢复！');
+        if (!confirm) return;
+
+        try {
+            const threeMonthsAgo = new Date();
+            threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+            
+            const where = {
+                createdAt: { "$lt": { "__type": "Date", "iso": threeMonthsAgo.toISOString() } }
+            };
+            
+            // 注意：LeanCloud API不支持批量删除，这里我们需要先查询出符合条件的记录
+            const queryRes = await fetch(`${API_BASE}/1.1/classes/AccessRecord?where=${encodeURIComponent(JSON.stringify(where))}&limit=1000`, {
+                headers: { 'X-LC-Id': APP_ID, 'X-LC-Key': `${APP_KEY},master` }
+            });
+            
+            const data = await queryRes.json();
+            
+            if (data.results.length === 0) {
+                alert('没有找到3个月前的数据');
+                return;
+            }
+            
+            // 确认是否继续删除
+            const secondConfirm = window.confirm(`将删除 ${data.results.length} 条记录，确定继续吗？`);
+            if (!secondConfirm) return;
+            
+            // 逐个删除记录
+            let deleteCount = 0;
+            for (const record of data.results) {
+                const deleteRes = await fetch(`${API_BASE}/1.1/classes/AccessRecord/${record.objectId}`, {
+                    method: 'DELETE',
+                    headers: { 'X-LC-Id': APP_ID, 'X-LC-Key': `${APP_KEY},master` }
+                });
+                
+                if (deleteRes.ok) {
+                    deleteCount++;
+                }
+            }
+            
+            alert(`清理完成，成功删除 ${deleteCount} 条记录`);
+        } catch (error) {
+            console.error('清理失败:', error);
+            alert('清理失败: ' + error.message);
+        }
+    }
+    
+    // ========== 工具函数 ==========
+    
+    // 时间格式化
+    function formatDateTime(isoTime) {
+        if (!isoTime) return '-';
+        const date = new Date(isoTime);
+        const year = date.getFullYear();
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const day = date.getDate().toString().padStart(2, '0');
+        const hours = date.getHours().toString().padStart(2, '0');
+        const minutes = date.getMinutes().toString().padStart(2, '0');
+        
+        return `${year}-${month}-${day} ${hours}:${minutes}`;
+    }
+    
+    // 计算持续时间
+    function calculateDuration(startTime, endTime) {
+        if (!startTime || !endTime) return '-';
+        
+        const start = new Date(startTime);
+        const end = new Date(endTime);
+        const diffMs = end - start;
+        
+        // 如果时间差小于0，可能是数据错误
+        if (diffMs < 0) return '时间错误';
+        
+        const diffMins = Math.floor(diffMs / 60000);
+        const hours = Math.floor(diffMins / 60);
+        const mins = diffMins % 60;
+        
+        if (hours > 0) {
+            return `${hours}小时${mins}分钟`;
+        } else {
+            return `${mins}分钟`;
+        }
+    }
+    
+    // 关闭弹窗的其他方式
+    window.onclick = function(event) {
+        const modal = document.getElementById('manualModal');
+        if (event.target === modal) {
+            closeModal();
+        }
+    }
+    </script>
+</body>
+</html> 
