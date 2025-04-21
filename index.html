@@ -6,6 +6,49 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
+    <script>
+    // 微信环境特殊处理
+    if(/MicroMessenger/i.test(navigator.userAgent)) {
+        window.addEventListener('load', function() {
+            // 区分iOS和安卓
+            var isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+            if (isIOS) {
+                // iOS微信中自动跳转到浏览器打开
+                var openInBrowserTip = document.createElement('div');
+                openInBrowserTip.style.position = 'fixed';
+                openInBrowserTip.style.top = '0';
+                openInBrowserTip.style.left = '0';
+                openInBrowserTip.style.width = '100%';
+                openInBrowserTip.style.padding = '10px';
+                openInBrowserTip.style.backgroundColor = '#ffeb3b';
+                openInBrowserTip.style.color = '#333';
+                openInBrowserTip.style.textAlign = 'center';
+                openInBrowserTip.style.zIndex = '9999';
+                openInBrowserTip.innerHTML = '在iOS微信中扫码可能出现问题，请点击右上角···，选择"在浏览器中打开"';
+                document.body.appendChild(openInBrowserTip);
+                
+                // 创建一个"复制链接"按钮
+                var copyLinkBtn = document.createElement('button');
+                copyLinkBtn.innerText = '复制链接';
+                copyLinkBtn.style.marginLeft = '10px';
+                copyLinkBtn.style.padding = '5px 10px';
+                copyLinkBtn.addEventListener('click', function() {
+                    var tempInput = document.createElement('input');
+                    tempInput.value = window.location.href;
+                    document.body.appendChild(tempInput);
+                    tempInput.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(tempInput);
+                    alert('链接已复制，请在Safari浏览器中粘贴打开');
+                });
+                openInBrowserTip.appendChild(copyLinkBtn);
+            } else {
+                // 安卓微信中提示
+                alert("建议点击右上角···，选择'在浏览器打开'以正常使用");
+            }
+        });
+    }
+    </script>
     <style>
         .container { max-width: 600px; margin: 20px auto; padding: 15px; }
         .stats { background: #f0f0f0; padding: 10px; margin-bottom: 20px; }
@@ -115,7 +158,10 @@ async function loadRealTimeData() {
     const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     const response = await fetch(`${API_BASE}/1.1/classes/AccessRecord?where=${query}`, {
-      headers: { 'X-LC-Id': APP_ID, 'X-LC-Key': APP_KEY },
+      headers: { 
+        'X-LC-Id': APP_ID, 
+        'X-LC-Key': `${APP_KEY},master` 
+      },
       signal: controller.signal
     });
     clearTimeout(timeoutId);
@@ -214,7 +260,7 @@ async function submitForm(e) {
       headers: {
         'Content-Type': 'application/json',
         'X-LC-Id': APP_ID,
-        'X-LC-Key': APP_KEY
+        'X-LC-Key': `${APP_KEY},master`
       },
       body: JSON.stringify(formData)
     });
