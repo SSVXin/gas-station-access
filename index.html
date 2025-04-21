@@ -82,7 +82,7 @@
 // LeanCloud配置
 const APP_ID = '2ZmC6sqLRb9RZu5esRlf0Rtg-gzGzoHsz';
 const APP_KEY = '4MOhNRmTw2JsXaJTTr2BzjLc';
-const API_BASE = `https://${APP_ID.replace(/-/g, '').substr(0,8)}.api.lncldapi.com`;
+const API_BASE = `https://2zmc6sql.lc-cn-n1-shared.com`;
 const CLASS_NAME = 'AccessRecord';
 
 // 全局参数
@@ -115,22 +115,16 @@ async function loadRealTimeData() {
   try {
     const query = encodeURIComponent(JSON.stringify({
       location: currentLocation,
-      // 添加时间范围限制（示例：最近24小时）
-      createdAt: {
-        "$gte": { "__type": "Date", "iso": new Date(Date.now()-86400000).toISOString() }
-      }
-    }));
+      createdAt: { "$gte": { "__type": "Date", "iso": new Date(Date.now()-86400000).toISOString() }
+    }}));
 
-    // ++++ 添加请求超时机制 ++++
+    // 设置15秒超时
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-    const response = await fetch(`${API_BASE}/1.1/classes/${CLASS_NAME}?where=${query}`, {
-      headers: {
-        'X-LC-Id': APP_ID,
-        'X-LC-Key': APP_KEY
-      },
-      signal: controller.signal // ++++ 绑定中止控制器 ++++
+    const response = await fetch(`${API_BASE}/1.1/classes/AccessRecord?where=${query}`, {
+      headers: { 'X-LC-Id': APP_ID, 'X-LC-Key': APP_KEY },
+      signal: controller.signal
     });
     clearTimeout(timeoutId);
 
@@ -143,16 +137,15 @@ async function loadRealTimeData() {
     const data = await response.json();
     const activeRecords = calculateActiveRecords(data.results);
     
-    // 更新页面显示...
+    // 更新显示
+    document.getElementById('currentStats').innerHTML = `
+      <p>当前区域人数: <strong>${activeRecords.length}</strong> 人</p>
+    `;
     
+    updateRecordsTable(activeRecords);
   } catch (error) {
-    // ++++ 细化错误提示 ++++
-    if (retry < 2) { // 最多重试2次
-      console.log(`第${retry+1}次重试...`);
-      await loadRealTimeData(retry + 1);
-    } else {
-      document.getElementById('currentStats').innerHTML = errorMsg;
-    }
+    console.error('数据加载失败:', error);
+    document.getElementById('currentStats').innerHTML = '数据加载失败，请检查网络';
   }
 }
 
