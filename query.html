@@ -49,25 +49,20 @@
     </div>
 
 <script>
-const APP_ID = '2ZmC6sqLRb9RZu5esRlf0Rtg-gzGzoHsz';
-const APP_KEY = '4MOhNRmTw2JsXaJTTr2BzjLc';
-const API_BASE = `https://${APP_ID.replace('-','').substring(0,8)}.api.lncldapi.com`; // 修正API地址
+const APP_ID = CONFIG.APP_ID;
+const APP_KEY = CONFIG.APP_KEY;
+const API_BASE = `https://${CONFIG.APP_ID.replace(/-/g, '').substr(0,8)}.api.lncldapi.com`; 
 
 // 初始化门禁位置
 function initLocations() {
     const locations = [
-        "能环部能中1#煤气站1号门",
-        "能环部能中1#煤气站2号门",
-        "能环部能中2#煤气站1号门",
-        "能环部能中2#煤气站2号门",
-        "能环部能中3#煤气站1号门",
-        "能环部能中3#煤气站2号门",
-        "能环部能中4#煤气站1号门",
-        "能环部能中4#煤气站2号门",
-        "能环部能中5#煤气站1号门",
-        "能环部能中5#煤气站2号门",
-        "能环部能中球罐区1号门",
-        "能环部能中球罐区2号门",
+        "能环部能中1#煤气站",
+        "能环部能中2#煤气站",
+        "能环部能中3#煤气站",
+        "能环部能中4#煤气站",
+        "能环部能中5#煤气站",
+        "能环部能中球罐区",
+        "能环部能中放散塔",
     ];
     const select = document.getElementById('manual_loc');
     locations.forEach(loc => {
