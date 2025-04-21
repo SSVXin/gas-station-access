@@ -136,9 +136,18 @@
                             <!-- 添加分页和计数信息 -->
                             <div class="d-flex justify-content-between align-items-center mt-3">
                                 <div id="dataTableCount" class="text-muted">共 0 条记录</div>
-                                <nav>
-                                    <ul id="dataTablePagination" class="pagination pagination-sm"></ul>
-                                </nav>
+                                <div class="d-flex align-items-center">
+                                    <span class="me-2">每页显示:</span>
+                                    <select id="dataPageSize" class="form-select form-select-sm" style="width: auto;" onchange="changePageSize('data')">
+                                        <option value="10">10</option>
+                                        <option value="20">20</option>
+                                        <option value="50">50</option>
+                                        <option value="100">100</option>
+                                    </select>
+                                    <nav class="ms-3">
+                                        <ul id="dataTablePagination" class="pagination pagination-sm mb-0"></ul>
+                                    </nav>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -194,9 +203,18 @@
                             <!-- 添加分页和计数信息 -->
                             <div class="d-flex justify-content-between align-items-center mt-3">
                                 <div id="recordsTableCount" class="text-muted">共 0 条记录</div>
-                                <nav>
-                                    <ul id="recordsTablePagination" class="pagination pagination-sm"></ul>
-                                </nav>
+                                <div class="d-flex align-items-center">
+                                    <span class="me-2">每页显示:</span>
+                                    <select id="recordsPageSize" class="form-select form-select-sm" style="width: auto;" onchange="changePageSize('records')">
+                                        <option value="10">10</option>
+                                        <option value="20">20</option>
+                                        <option value="50">50</option>
+                                        <option value="100">100</option>
+                                    </select>
+                                    <nav class="ms-3">
+                                        <ul id="recordsTablePagination" class="pagination pagination-sm mb-0"></ul>
+                                    </nav>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -267,8 +285,10 @@
     const ADMIN_PASSWORD = 'dlxj321';
     
     // 分页相关变量
-    const itemsPerPage = 10; // 每页显示10条记录
-    let currentPage = 1; // 进出记录管理的当前页
+    const defaultItemsPerPage = 10; // 默认每页显示10条记录
+    let itemsPerPage = defaultItemsPerPage;
+    let recordsItemsPerPage = defaultItemsPerPage;
+    let currentPage = 1; // 实时人员的当前页
     let recordsCurrentPage = 1; // 补登记管理的当前页
     let recordsData = []; // 存储补登记管理的原始数据
     
@@ -289,6 +309,10 @@
         
         // 设置自动刷新实时数据 (每60秒)
         setInterval(loadRealTimeData, 60000);
+        
+        // 初始化页面大小选择器
+        document.getElementById('dataPageSize').value = itemsPerPage;
+        document.getElementById('recordsPageSize').value = recordsItemsPerPage;
     });
     
     // 初始化日期选择器
@@ -509,18 +533,57 @@
     function exportCSV() {
         // 导出当前查询的所有记录
         if (!recordsData || recordsData.length === 0) {
-            alert('请先查询数据，再导出');
+            // 如果没有预先查询过，先执行查询
+            const startDate = document.getElementById('queryStartDate').value;
+            const endDate = document.getElementById('queryEndDate').value;
+            
+            const where = {};
+            if(startDate || endDate) {
+                where.createdAt = {};
+                if(startDate) where.createdAt.$gte = { "__type": "Date", "iso": startDate + "T00:00:00.000Z" };
+                if(endDate) where.createdAt.$lte = { "__type": "Date", "iso": endDate + "T23:59:59.999Z" };
+            }
+            
+            // 执行查询获取所有数据
+            fetch(`${API_BASE}/1.1/classes/AccessRecord?where=${encodeURIComponent(JSON.stringify(where))}&order=createdAt&limit=1000`, {
+                headers: { 'X-LC-Id': APP_ID, 'X-LC-Key': `${APP_KEY},master` }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (!data.results || data.results.length === 0) {
+                    alert('没有数据可导出');
+                    return;
+                }
+                // 导出查询到的数据
+                exportDataToCSV(data.results);
+            })
+            .catch(error => {
+                console.error('查询数据失败:', error);
+                alert('查询数据失败: ' + error.message);
+            });
+        } else {
+            // 直接使用已查询的数据
+            exportDataToCSV(recordsData);
+        }
+    }
+    
+    // 实际执行导出CSV操作
+    function exportDataToCSV(data) {
+        if (!data || data.length === 0) {
+            alert('没有数据可导出');
             return;
         }
         
+        console.log('导出数据记录数:', data.length);
+        
         let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; // 添加BOM以支持中文
         
-        // 添加表头
+        // 添加表头 
         const headerRow = ["姓名", "工号", "事由", "地点", "进出方向", "时间"];
         csvContent += headerRow.map(h => `"${h}"`).join(',') + '\r\n';
         
         // 添加数据行
-        recordsData.forEach(record => {
+        data.forEach(record => {
             const row = [
                 record.name || '-',
                 record.employee_id || '-',
@@ -536,7 +599,7 @@
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `进出原始记录_${new Date().toISOString().split('T')[0]}.csv`);
+        link.setAttribute("download", `进出记录_${new Date().toISOString().split('T')[0]}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -548,15 +611,15 @@
         
         // 计算当前页显示的记录
         const totalItems = records.length;
-        const totalPages = Math.ceil(totalItems / itemsPerPage);
+        const totalPages = Math.ceil(totalItems / recordsItemsPerPage);
         recordsCurrentPage = Math.min(recordsCurrentPage, totalPages || 1);
         
         // 更新分页器
         updatePagination('recordsTablePagination', totalPages, recordsCurrentPage, () => renderRecordsTable(records));
         
         // 获取当前页的数据
-        const startIndex = (recordsCurrentPage - 1) * itemsPerPage;
-        const currentPageItems = records.slice(startIndex, startIndex + itemsPerPage);
+        const startIndex = (recordsCurrentPage - 1) * recordsItemsPerPage;
+        const currentPageItems = records.slice(startIndex, startIndex + recordsItemsPerPage);
         
         tbody.innerHTML = currentPageItems.map((record, index) => {
             const realIndex = startIndex + index; // 计算在原始数组中的索引
@@ -856,6 +919,21 @@
                 callback();
             });
         });
+    }
+
+    // 改变每页显示记录数
+    function changePageSize(type) {
+        if (type === 'data') {
+            itemsPerPage = parseInt(document.getElementById('dataPageSize').value);
+            currentPage = 1; // 重置为第一页
+            loadRealTimeData(); // 重新加载数据
+        } else if (type === 'records') {
+            recordsItemsPerPage = parseInt(document.getElementById('recordsPageSize').value);
+            recordsCurrentPage = 1; // 重置为第一页
+            if (recordsData && recordsData.length > 0) {
+                renderRecordsTable(recordsData); // 重新渲染表格
+            }
+        }
     }
     </script>
 </body>
