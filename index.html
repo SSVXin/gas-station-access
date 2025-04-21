@@ -253,6 +253,33 @@ async function submitForm(e) {
     console.log('本地存储失败:', error);
   }
 
+  // 对于出门记录，自动关联进门时的事由
+  if (currentDirection === 'out') {
+    try {
+      // 查询该用户对该门禁的最近一次进入记录
+      const query = encodeURIComponent(JSON.stringify({
+        employee_id: formData.employee_id,
+        location: currentLocation,
+        direction: 'in'
+      }));
+      
+      const response = await fetch(`${API_BASE}/1.1/classes/AccessRecord?where=${query}&order=-createdAt&limit=1`, {
+        headers: { 'X-LC-Id': APP_ID, 'X-LC-Key': `${APP_KEY},master` }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        // 如果找到进入记录，使用进入记录的事由
+        if (data.results && data.results.length > 0) {
+          formData.purpose = data.results[0].purpose || formData.purpose;
+        }
+      }
+    } catch (error) {
+      console.error('获取进门记录失败:', error);
+      // 获取失败时使用默认选择的事由，不影响后续操作
+    }
+  }
+
   // ================ 修改点2：请求配置 ================
   try {
     const response = await fetch(`${API_BASE}/1.1/classes/${CLASS_NAME}`, {
