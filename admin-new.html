@@ -142,6 +142,13 @@
                                 </thead>
                                 <tbody></tbody>
                             </table>
+                            <!-- 添加分页和计数信息 -->
+                            <div class="d-flex justify-content-between align-items-center mt-3">
+                                <div id="dataTableCount" class="text-muted">共 0 条记录</div>
+                                <nav>
+                                    <ul id="dataTablePagination" class="pagination pagination-sm"></ul>
+                                </nav>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -162,7 +169,8 @@
                                     <input type="text" class="form-control" id="queryEndDate" placeholder="选择结束日期">
                                     
                                     <button class="btn btn-primary" onclick="loadRecords()">查询原始记录</button>
-                                    <button class="btn btn-warning" onclick="showManualForm()">出区域补登记</button>
+                                    <button class="btn btn-warning" onclick="showManualForm()">手动补登记</button>
+                                    <button class="btn btn-info" onclick="registerFromSelected()">从选中记录补登</button>
                                 </div>
                             </div>
                         </div>
@@ -171,6 +179,7 @@
                             <table id="recordsTable" class="table table-striped table-hover">
                                 <thead class="table-dark">
                                     <tr>
+                                        <th width="40px"><input type="checkbox" id="selectAll" onclick="toggleSelectAll()"></th>
                                         <th>姓名</th>
                                         <th>工号</th>
                                         <th>事由</th>
@@ -181,6 +190,13 @@
                                 </thead>
                                 <tbody></tbody>
                             </table>
+                            <!-- 添加分页和计数信息 -->
+                            <div class="d-flex justify-content-between align-items-center mt-3">
+                                <div id="recordsTableCount" class="text-muted">共 0 条记录</div>
+                                <nav>
+                                    <ul id="recordsTablePagination" class="pagination pagination-sm"></ul>
+                                </nav>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -223,6 +239,11 @@
                     <!-- 通过JS动态填充 -->
                 </select>
             </div>
+            <div class="mb-3">
+                <label for="manual_time" class="form-label">离开时间</label>
+                <input type="datetime-local" class="form-control" id="manual_time">
+                <small class="text-muted">请选择实际离开的时间</small>
+            </div>
             <div class="d-flex justify-content-end gap-2">
                 <button class="btn btn-secondary" onclick="closeModal()">取消</button>
                 <button class="btn btn-primary" onclick="submitManual()">提交</button>
@@ -243,6 +264,12 @@
     
     // 管理员密码 (注意：在生产环境中应该考虑更安全的方式)
     const ADMIN_PASSWORD = 'dlxj321';
+    
+    // 分页相关变量
+    const itemsPerPage = 10; // 每页显示10条记录
+    let currentPage = 1; // 进出记录管理的当前页
+    let recordsCurrentPage = 1; // 补登记管理的当前页
+    let recordsData = []; // 存储补登记管理的原始数据
     
     // 初始化日期选择器
     document.addEventListener('DOMContentLoaded', () => {
@@ -369,7 +396,21 @@
     function renderTable(records) {
         const grouped = groupRecords(records);
         const tbody = document.querySelector('#dataTable tbody');
-        tbody.innerHTML = Object.values(grouped).map(record => `
+        
+        // 计算当前页显示的记录
+        const values = Object.values(grouped);
+        const totalItems = values.length;
+        const totalPages = Math.ceil(totalItems / itemsPerPage);
+        currentPage = Math.min(currentPage, totalPages || 1);
+        
+        // 更新分页器
+        updatePagination('dataTablePagination', totalPages, currentPage, () => renderTable(records));
+        
+        // 获取当前页的数据
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const currentPageItems = values.slice(startIndex, startIndex + itemsPerPage);
+        
+        tbody.innerHTML = currentPageItems.map(record => `
             <tr>
                 <td>${record.name || '-'}</td>
                 <td>${record.employee_id || '-'}</td>
@@ -380,6 +421,12 @@
                 <td>${record.duration || '进行中'}</td>
             </tr>
         `).join('');
+        
+        // 显示记录总数
+        const countInfo = document.getElementById('dataTableCount');
+        if (countInfo) {
+            countInfo.textContent = `共 ${totalItems} 条记录`;
+        }
     }
     
     // 数据分组（进出匹配）
@@ -388,7 +435,9 @@
         records.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt));
         
         records.forEach(r => {
-            const key = r.employee_id + r.location;
+            // 修改：增加更具体的键，包含员工ID、地点和方向
+            const key = `${r.employee_id}_${r.location}_${r.direction === 'in' ? 'in' : 'out'}`;
+            
             if (r.direction === 'in') {
                 map[key] = {
                     ...r,
@@ -397,9 +446,19 @@
                     duration: null
                 };
             } else if (r.direction === 'out') {
-                if (map[key]) {
-                    map[key].outTime = r.createdAt;
-                    map[key].duration = calculateDuration(map[key].inTime, r.createdAt);
+                // 查找对应的入场记录
+                const inKey = `${r.employee_id}_${r.location}_in`;
+                if (map[inKey]) {
+                    map[inKey].outTime = r.createdAt;
+                    map[inKey].duration = calculateDuration(map[inKey].inTime, r.createdAt);
+                } else {
+                    // 如果没有找到对应的入场记录，也记录这个出场记录
+                    map[key] = {
+                        ...r,
+                        inTime: null,
+                        outTime: r.createdAt,
+                        duration: null
+                    };
                 }
             }
         });
@@ -409,40 +468,74 @@
     
     // 导出CSV
     function exportCSV() {
-        // 获取表格数据
-        const table = document.getElementById('dataTable');
-        const rows = table.querySelectorAll('tr');
+        // 获取所有数据，而不仅仅是当前页的数据
+        const where = {};
         
-        if (rows.length <= 1) {
-            alert('没有数据可导出');
-            return;
+        // 构建查询条件
+        const location = document.getElementById('locationFilter').value;
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+        
+        if (location) where.location = location;
+        if (startDate || endDate) {
+            where.createdAt = {};
+            if (startDate) where.createdAt.$gte = { "__type": "Date", "iso": startDate + "T00:00:00.000Z" };
+            if (endDate) where.createdAt.$lte = { "__type": "Date", "iso": endDate + "T23:59:59.999Z" };
         }
-        
-        let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; // 添加BOM以支持中文
-        
-        // 添加表头
-        const headerRow = Array.from(rows[0].querySelectorAll('th'))
-            .map(th => `"${th.textContent}"`)
-            .join(',');
-        csvContent += headerRow + '\r\n';
-        
-        // 添加数据行
-        for (let i = 1; i < rows.length; i++) {
-            const row = rows[i];
-            const rowData = Array.from(row.querySelectorAll('td'))
-                .map(td => `"${td.textContent}"`)
-                .join(',');
-            csvContent += rowData + '\r\n';
-        }
-        
-        // 创建下载链接
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `出入记录_${new Date().toISOString().split('T')[0]}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+
+        // 先获取所有数据，然后再导出
+        fetch(`${API_BASE}/1.1/classes/AccessRecord?where=${encodeURIComponent(JSON.stringify(where))}&order=createdAt&limit=1000`, {
+            headers: { 'X-LC-Id': APP_ID, 'X-LC-Key': `${APP_KEY},master` }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (!data.results || data.results.length === 0) {
+                alert('没有数据可导出');
+                return;
+            }
+            
+            // 使用查询结果，而不是表格中的数据
+            const grouped = groupRecords(data.results);
+            const records = Object.values(grouped);
+            
+            if (records.length === 0) {
+                alert('没有数据可导出');
+                return;
+            }
+            
+            let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; // 添加BOM以支持中文
+            
+            // 添加表头
+            const headerRow = ["姓名", "工号", "事由", "地点", "进入时间", "离开时间", "停留时长"];
+            csvContent += headerRow.map(h => `"${h}"`).join(',') + '\r\n';
+            
+            // 添加数据行
+            records.forEach(record => {
+                const row = [
+                    record.name || '-',
+                    record.employee_id || '-',
+                    record.purpose || '-',
+                    record.location || '-',
+                    record.inTime ? formatDateTime(record.inTime) : '-',
+                    record.outTime ? formatDateTime(record.outTime) : '未离开',
+                    record.duration || '进行中'
+                ];
+                csvContent += row.map(cell => `"${cell}"`).join(',') + '\r\n';
+            });
+            
+            // 创建下载链接
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `出入记录_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        })
+        .catch(error => {
+            console.error('导出失败:', error);
+            alert('导出失败: ' + error.message);
+        });
     }
     
     // ========== 补登记功能 ==========
@@ -465,6 +558,7 @@
             });
             
             const data = await res.json();
+            recordsData = data.results; // 保存数据供后续使用
             renderRecordsTable(data.results);
         } catch (error) {
             console.error('查询失败:', error);
@@ -475,8 +569,26 @@
     // 渲染原始记录表格
     function renderRecordsTable(records) {
         const tbody = document.querySelector('#recordsTable tbody');
-        tbody.innerHTML = records.map(record => `
-            <tr>
+        
+        // 计算当前页显示的记录
+        const totalItems = records.length;
+        const totalPages = Math.ceil(totalItems / itemsPerPage);
+        recordsCurrentPage = Math.min(recordsCurrentPage, totalPages || 1);
+        
+        // 更新分页器
+        updatePagination('recordsTablePagination', totalPages, recordsCurrentPage, () => renderRecordsTable(records));
+        
+        // 获取当前页的数据
+        const startIndex = (recordsCurrentPage - 1) * itemsPerPage;
+        const currentPageItems = records.slice(startIndex, startIndex + itemsPerPage);
+        
+        tbody.innerHTML = currentPageItems.map((record, index) => {
+            const realIndex = startIndex + index; // 计算在原始数组中的索引
+            return `
+            <tr data-index="${realIndex}">
+                <td>
+                    <input type="checkbox" class="record-checkbox" data-index="${realIndex}">
+                </td>
                 <td>${record.name || '-'}</td>
                 <td>${record.employee_id || '-'}</td>
                 <td>${record.purpose || '-'}</td>
@@ -484,16 +596,28 @@
                 <td>${record.direction === 'in' ? '进入' : '离开'}</td>
                 <td>${formatDateTime(record.createdAt)}</td>
             </tr>
-        `).join('');
+        `}).join('');
+        
+        // 显示记录总数
+        const countInfo = document.getElementById('recordsTableCount');
+        if (countInfo) {
+            countInfo.textContent = `共 ${totalItems} 条记录`;
+        }
     }
     
     // 手动补登功能
     async function submitManual() {
         const employeeId = document.getElementById('manual_id').value.trim();
         const location = document.getElementById('manual_loc').value;
+        const exitTime = document.getElementById('manual_time').value;
         
         if (!employeeId) {
             alert('请输入工号');
+            return;
+        }
+        
+        if (!exitTime) {
+            alert('请选择离开时间');
             return;
         }
 
@@ -516,6 +640,9 @@
             // 使用最近的进入记录中的姓名
             const personName = checkData.results[0].name || "未知";
             
+            // 构建离开记录时间
+            const exitDateTime = new Date(exitTime);
+            
             // 提交离开记录
             const submitRes = await fetch(`${API_BASE}/1.1/classes/AccessRecord`, {
                 method: 'POST',
@@ -529,7 +656,11 @@
                     location: location,
                     direction: "out",
                     purpose: "管理员补登",
-                    name: personName + "(管理员补登)"
+                    name: personName + "(管理员补登)",
+                    createdAt: {
+                        __type: "Date",
+                        iso: exitDateTime.toISOString()
+                    }
                 })
             });
             
@@ -548,7 +679,40 @@
         }
     }
     
-    // 弹窗控制
+    // 从选中记录补登
+    function registerFromSelected() {
+        const checkboxes = document.querySelectorAll('.record-checkbox:checked');
+        if (checkboxes.length === 0) {
+            alert('请先选择一条记录');
+            return;
+        }
+        
+        if (checkboxes.length > 1) {
+            alert('一次只能选择一条记录进行补登');
+            return;
+        }
+        
+        const index = parseInt(checkboxes[0].getAttribute('data-index'));
+        const record = recordsData[index];
+        
+        if (record.direction !== 'in') {
+            alert('只能为进入记录补登离开信息');
+            return;
+        }
+        
+        // 填充表单并显示
+        document.getElementById('manual_id').value = record.employee_id;
+        document.getElementById('manual_loc').value = record.location;
+        
+        // 设置默认补登时间为现在
+        const now = new Date();
+        document.getElementById('manual_time').value = 
+            `${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2,'0')}-${now.getDate().toString().padStart(2,'0')}T${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+        
+        showManualForm();
+    }
+    
+    // 补登记相关函数
     function showManualForm() {
         document.getElementById('manualModal').style.display = 'block';
     }
@@ -651,6 +815,71 @@
         if (event.target === modal) {
             closeModal();
         }
+    }
+
+    // 全选/取消全选
+    function toggleSelectAll() {
+        const selectAll = document.getElementById('selectAll');
+        const checkboxes = document.querySelectorAll('.record-checkbox');
+        
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = selectAll.checked;
+        });
+    }
+    
+    // 更新分页器
+    function updatePagination(paginationId, totalPages, currentPageNum, callback) {
+        const pagination = document.getElementById(paginationId);
+        if (!pagination) return;
+        
+        let paginationHTML = '';
+        
+        // 上一页按钮
+        paginationHTML += `
+            <li class="page-item ${currentPageNum <= 1 ? 'disabled' : ''}">
+                <a class="page-link" href="#" data-page="${currentPageNum - 1}" aria-label="Previous">
+                    <span aria-hidden="true">&laquo;</span>
+                </a>
+            </li>
+        `;
+        
+        // 页码按钮
+        const startPage = Math.max(1, currentPageNum - 2);
+        const endPage = Math.min(totalPages, startPage + 4);
+        
+        for (let i = startPage; i <= endPage; i++) {
+            paginationHTML += `
+                <li class="page-item ${i === currentPageNum ? 'active' : ''}">
+                    <a class="page-link" href="#" data-page="${i}">${i}</a>
+                </li>
+            `;
+        }
+        
+        // 下一页按钮
+        paginationHTML += `
+            <li class="page-item ${currentPageNum >= totalPages ? 'disabled' : ''}">
+                <a class="page-link" href="#" data-page="${currentPageNum + 1}" aria-label="Next">
+                    <span aria-hidden="true">&raquo;</span>
+                </a>
+            </li>
+        `;
+        
+        pagination.innerHTML = paginationHTML;
+        
+        // 绑定事件
+        const pageLinks = pagination.querySelectorAll('.page-link');
+        pageLinks.forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const pageNum = parseInt(this.getAttribute('data-page'));
+                if (paginationId === 'dataTablePagination') {
+                    currentPage = pageNum;
+                } else if (paginationId === 'recordsTablePagination') {
+                    recordsCurrentPage = pageNum;
+                }
+                callback();
+            });
+        });
     }
     </script>
 </body>
