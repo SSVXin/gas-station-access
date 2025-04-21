@@ -283,6 +283,12 @@
         triggerTabList.forEach(function (triggerEl) {
             new bootstrap.Tab(triggerEl);
         });
+        
+        // 初始加载实时人员数据
+        loadRealTimeData();
+        
+        // 设置自动刷新实时数据 (每60秒)
+        setInterval(loadRealTimeData, 60000);
     });
     
     // 初始化日期选择器
@@ -396,44 +402,30 @@
     
     // 获取活跃用户（已进入但未离开的）
     function getActiveUsers(records) {
-        // 记录每个人的进入和离开状态
-        const userStatus = {};
-        
-        // 按时间正序排列，处理每条记录
+        // 按时间排序，确保先处理较早的记录
         records.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
         
-        // 获取所有出门记录
-        const outRecords = {};
+        // 创建一个映射来跟踪每个人的最新状态
+        const statusMap = new Map();
+        
+        // 遍历所有记录，按时间顺序处理每条记录
         for (const record of records) {
-            if (record.direction === 'out') {
-                const key = `${record.employee_id}_${record.location}`;
-                if (!outRecords[key]) {
-                    outRecords[key] = [];
-                }
-                outRecords[key].push(record);
+            const key = `${record.employee_id}_${record.location}`;
+            
+            if (record.direction === 'in') {
+                // 进入记录：将此人标记为在区域内
+                statusMap.set(key, record);
+            } else if (record.direction === 'out') {
+                // 离开记录：移除此人的在场状态
+                statusMap.delete(key);
             }
         }
         
-        // 筛选未匹配出门记录的入门记录
-        const activeUsers = [];
-        for (const record of records) {
-            if (record.direction === 'in') {
-                const key = `${record.employee_id}_${record.location}`;
-                const matchingOutRecords = outRecords[key] || [];
-                
-                // 检查是否有晚于该入场记录的出场记录
-                const hasMatched = matchingOutRecords.some(
-                    outRecord => new Date(outRecord.createdAt) > new Date(record.createdAt)
-                );
-                
-                if (!hasMatched) {
-                    activeUsers.push({
-                        ...record,
-                        duration: calculateDuration(record.createdAt, new Date().toISOString())
-                    });
-                }
-            }
-        }
+        // 将Map转换为数组并添加持续时间
+        const activeUsers = Array.from(statusMap.values()).map(record => ({
+            ...record,
+            duration: calculateDuration(record.createdAt, new Date().toISOString())
+        }));
         
         return activeUsers;
     }
