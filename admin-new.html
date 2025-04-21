@@ -370,62 +370,74 @@
     
     // 加载实时人员数据
     async function loadRealTimeData() {
-        const location = document.getElementById('locationFilter').value;
-        const where = {
-            direction: "in" // 只查询进入记录
-        };
-        
-        if (location) {
-            where.location = location;
-        }
-        
-        // 设置最近30天的时间范围，避免查询过多历史数据
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        where.createdAt = { "$gte": { "__type": "Date", "iso": thirtyDaysAgo.toISOString() } };
-
         try {
-            const res = await fetch(`${API_BASE}/1.1/classes/AccessRecord?where=${encodeURIComponent(JSON.stringify(where))}&order=-createdAt&limit=1000`, {
-                headers: { 'X-LC-Id': APP_ID, 'X-LC-Key': `${APP_KEY},master` }
+            // 查询所有记录，不预先筛选方向，而是后续在代码中分析谁真正在区域内
+            const location = document.getElementById('locationFilter').value;
+            
+            // 构建查询条件
+            const where = {};
+            if (location) {
+                where.location = location;
+            }
+            
+            // 只查询最近30天的记录，避免处理过多历史数据
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            where.createdAt = { "$gte": { "__type": "Date", "iso": thirtyDaysAgo.toISOString() } };
+            
+            // 获取所有记录
+            const response = await fetch(`${API_BASE}/1.1/classes/AccessRecord?where=${encodeURIComponent(JSON.stringify(where))}&limit=1000&order=createdAt`, {
+                headers: { 
+                    'X-LC-Id': APP_ID, 
+                    'X-LC-Key': `${APP_KEY},master` 
+                }
             });
             
-            const data = await res.json();
+            if (!response.ok) {
+                throw new Error(`HTTP错误: ${response.status}`);
+            }
             
-            // 过滤出仍在区域内的人员
-            const activeUsers = getActiveUsers(data.results);
-            renderRealTimeTable(activeUsers);
+            const data = await response.json();
+            console.log("获取到总记录数:", data.results.length);
+            
+            // 找出真正在区域内的人员
+            const peopleInside = findPeopleCurrentlyInside(data.results);
+            console.log("当前在区域内人数:", peopleInside.length);
+            
+            // 渲染表格
+            renderRealTimeTable(peopleInside);
         } catch (error) {
-            console.error('数据加载失败:', error);
-            alert('数据加载失败: ' + error.message);
+            console.error("加载实时数据失败:", error);
+            alert("加载实时人员数据失败: " + error.message);
         }
     }
     
-    // 获取活跃用户（已进入但未离开的）
-    function getActiveUsers(records) {
-        // 按时间排序，确保先处理较早的记录
+    // 分析记录找出当前在区域内的人员
+    function findPeopleCurrentlyInside(records) {
+        // 按人员ID和位置分组的最新状态
+        const latestStatus = new Map();
+        
+        // 先按时间排序，确保正确处理
         records.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
         
-        // 创建一个映射来跟踪每个人的最新状态
-        const statusMap = new Map();
-        
-        // 遍历所有记录，按时间顺序处理每条记录
+        // 处理每条记录
         for (const record of records) {
             const key = `${record.employee_id}_${record.location}`;
             
-            if (record.direction === 'in') {
-                // 进入记录：将此人标记为在区域内
-                statusMap.set(key, record);
-            } else if (record.direction === 'out') {
-                // 离开记录：移除此人的在场状态
-                statusMap.delete(key);
-            }
+            // 更新该人员在该位置的最新状态
+            latestStatus.set(key, record);
         }
         
-        // 将Map转换为数组并添加持续时间
-        const activeUsers = Array.from(statusMap.values()).map(record => ({
-            ...record,
-            duration: calculateDuration(record.createdAt, new Date().toISOString())
-        }));
+        // 只保留最新状态为"进入"的记录
+        const activeUsers = [];
+        for (const [key, record] of latestStatus.entries()) {
+            if (record.direction === 'in') {
+                activeUsers.push({
+                    ...record,
+                    duration: calculateDuration(record.createdAt, new Date().toISOString())
+                });
+            }
+        }
         
         return activeUsers;
     }
