@@ -814,7 +814,17 @@
     // ========== 工具函数 ==========
     
     // 时间格式化
-    function formatDateTime(isoTime) {
+    function formatDateTime(createdAt) {
+        // 处理LeanCloud的Date对象
+        let isoTime;
+        if (createdAt && typeof createdAt === 'object' && createdAt.__type === 'Date') {
+            isoTime = createdAt.iso;
+        } else if (typeof createdAt === 'string') {
+            isoTime = createdAt;
+        } else {
+            return '-';
+        }
+
         if (!isoTime) return '-';
         const date = new Date(isoTime);
         const year = date.getFullYear();
