@@ -8,10 +8,54 @@
     <meta http-equiv="Expires" content="0">
     <script>
     // 微信环境特殊处理
-    if(/MicroMessenger/i.test(navigator.userAgent)) {
+    var isWechat = /MicroMessenger/i.test(navigator.userAgent);
+    if(isWechat) {
         window.addEventListener('load', function() {
             // 区分iOS和安卓
             var isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+            // 添加微信环境下的按钮样式
+            var wechatCss = document.createElement('style');
+            wechatCss.type = 'text/css';
+            wechatCss.innerHTML = `
+                .submit-btn {
+                    width: 100% !important;
+                    height: auto !important;
+                    padding: 18px !important;
+                    font-size: 20px !important;
+                    font-weight: bold !important;
+                    margin-top: 25px !important;
+                    margin-bottom: 15px !important;
+                    background-color: #07C160 !important; /* 微信绿色 */
+                    color: white !important;
+                    border: none !important;
+                    border-radius: 4px !important;
+                    -webkit-appearance: none !important;
+                    -webkit-tap-highlight-color: transparent !important;
+                    appearance: none !important;
+                    box-sizing: border-box !important;
+                    display: block !important;
+                }
+                input[type="text"], select {
+                    width: 100% !important;
+                    padding: 12px !important;
+                    font-size: 18px !important;
+                    margin-bottom: 15px !important;
+                    border: 1px solid #ddd !important;
+                    border-radius: 4px !important;
+                    box-sizing: border-box !important;
+                }
+                label {
+                    display: block !important;
+                    margin-bottom: 5px !important;
+                    font-weight: bold !important;
+                    font-size: 16px !important;
+                }
+                form div {
+                    margin-bottom: 15px !important;
+                }
+            `;
+            document.head.appendChild(wechatCss);
+            
             if (isIOS) {
                 // iOS微信中自动跳转到浏览器打开
                 var openInBrowserTip = document.createElement('div');
@@ -24,7 +68,7 @@
                 openInBrowserTip.style.color = '#333';
                 openInBrowserTip.style.textAlign = 'center';
                 openInBrowserTip.style.zIndex = '9999';
-                openInBrowserTip.innerHTML = '在iOS微信中扫码可能出现问题，请点击右上角···，选择"在浏览器中打开"';
+                openInBrowserTip.innerHTML = '使用"在浏览器中打开"可获得更好体验';
                 document.body.appendChild(openInBrowserTip);
                 
                 // 创建一个"复制链接"按钮
@@ -43,8 +87,20 @@
                 });
                 openInBrowserTip.appendChild(copyLinkBtn);
             } else {
-                // 安卓微信中提示
-                alert("建议点击右上角···，选择'在浏览器打开'以正常使用");
+                // 安卓微信中的提示改为小横幅
+                var openInBrowserTip = document.createElement('div');
+                openInBrowserTip.style.position = 'fixed';
+                openInBrowserTip.style.top = '0';
+                openInBrowserTip.style.left = '0';
+                openInBrowserTip.style.width = '100%';
+                openInBrowserTip.style.padding = '5px';
+                openInBrowserTip.style.backgroundColor = '#ffeb3b';
+                openInBrowserTip.style.color = '#333';
+                openInBrowserTip.style.textAlign = 'center';
+                openInBrowserTip.style.zIndex = '9999';
+                openInBrowserTip.style.fontSize = '12px';
+                openInBrowserTip.innerHTML = '点击右上角选择"在浏览器打开"可获得更好体验';
+                document.body.appendChild(openInBrowserTip);
             }
         });
     }
