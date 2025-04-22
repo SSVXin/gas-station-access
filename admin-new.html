@@ -442,7 +442,7 @@
         const latestStatus = new Map();
         
         // 先按时间排序，确保正确处理
-        records.sort((a, b) => new Date(a.createdAt.iso) - new Date(b.createdAt.iso));
+        records.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
         
         // 处理每条记录
         for (const record of records) {
@@ -458,7 +458,7 @@
             if (record.direction === 'in') {
                 activeUsers.push({
                     ...record,
-                    duration: calculateDuration(record.createdAt.iso, new Date().toISOString())
+                    duration: calculateDuration(record.createdAt, new Date().toISOString())
                 });
             }
         }
@@ -489,7 +489,7 @@
                 <td>${user.employee_id || '-'}</td>
                 <td>${user.purpose || '-'}</td>
                 <td>${user.location || '-'}</td>
-                <td>${formatDateTime(user.createdAt.iso)}</td>
+                <td>${formatDateTime(user.createdAt)}</td>
                 <td>${user.duration || '-'}</td>
             </tr>
         `).join('');
@@ -523,17 +523,6 @@
             const data = await res.json();
             recordsData = data.results; // 保存数据供后续使用
             renderRecordsTable(data.results);
-
-            // 添加调试日志
-            if (recordsData.length > 0) {
-                console.log('首条记录详情:', {
-                    name: recordsData[0].name,
-                    direction: recordsData[0].direction,
-                    createdAt: recordsData[0].createdAt
-                });
-            }
-
-            renderRecordsTable(recordsData);
         } catch (error) {
             console.error('查询失败:', error);
             alert('查询失败: ' + error.message);
@@ -541,10 +530,8 @@
     }
     
     // 导出CSV
-    function exportCSV() {
-        // 导出当前查询的所有记录
-        if (!recordsData || recordsData.length === 0) {
-            // 如果没有预先查询过，先执行查询
+    async function exportCSV() {
+        try {
             const startDate = document.getElementById('queryStartDate').value;
             const endDate = document.getElementById('queryEndDate').value;
             
@@ -554,27 +541,33 @@
                 if(startDate) where.createdAt.$gte = { "__type": "Date", "iso": startDate + "T00:00:00.000Z" };
                 if(endDate) where.createdAt.$lte = { "__type": "Date", "iso": endDate + "T23:59:59.999Z" };
             }
+
+            let allRecords = [];
+            let skip = 0;
+            const limit = 1000; // LeanCloud单次查询上限
             
-            // 执行查询获取所有数据
-            fetch(`${API_BASE}/1.1/classes/AccessRecord?where=${encodeURIComponent(JSON.stringify(where))}&order=createdAt&limit=1000`, {
-                headers: { 'X-LC-Id': APP_ID, 'X-LC-Key': `${APP_KEY},master` }
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (!data.results || data.results.length === 0) {
-                    alert('没有数据可导出');
-                    return;
-                }
-                // 导出查询到的数据
-                exportDataToCSV(data.results);
-            })
-            .catch(error => {
-                console.error('查询数据失败:', error);
-                alert('查询数据失败: ' + error.message);
-            });
-        } else {
-            // 直接使用已查询的数据
-            exportDataToCSV(recordsData);
+            while(true) {
+                const query = `where=${encodeURIComponent(JSON.stringify(where))}&order=createdAt&limit=${limit}&skip=${skip}`;
+                const res = await fetch(`${API_BASE}/1.1/classes/AccessRecord?${query}`, {
+                    headers: { 'X-LC-Id': APP_ID, 'X-LC-Key': `${APP_KEY},master` }
+                });
+                
+                const data = await res.json();
+                if(!data.results || data.results.length === 0) break;
+                
+                allRecords = allRecords.concat(data.results);
+                skip += limit;
+            }
+
+            if(allRecords.length === 0) {
+                alert('没有数据可导出');
+                return;
+            }
+            
+            exportDataToCSV(allRecords);
+        } catch(error) {
+            console.error('导出失败:', error);
+            alert('导出失败: ' + error.message);
         }
     }
     
@@ -585,38 +578,21 @@
             return;
         }
         
-        console.log('导出数据记录数:', data.length);
+        let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
         
-        let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; // 添加BOM以支持中文
-
-        // 添加调试信息
-        console.log('第一条记录样例:', JSON.stringify(data[0], null, 2));
-        
-        // 添加表头 
+        // 表头
         const headerRow = ["姓名", "工号", "事由", "地点", "进出方向", "时间"];
         csvContent += headerRow.map(h => `"${h}"`).join(',') + '\r\n';
         
-        // 添加数据行
+        // 数据行
         data.forEach(record => {
-            // 处理时间字段
-            let recordTime;
-            if (record.createdAt && typeof record.createdAt === 'object') {
-                recordTime = record.createdAt.iso; // LeanCloud日期对象
-            } else {
-                recordTime = record.createdAt; // ISO字符串
-            }
-
-            // 处理方向字段
-            const direction = record.direction === 'in' ? '进入' : 
-                            record.direction === 'out' ? '离开' : 
-                            '未知方向';
             const row = [
                 record.name || '-',
                 record.employee_id || '-',
                 record.purpose || '-',
                 record.location || '-',
-                direction,
-                formatDateTime(recordTime)
+                record.direction === 'in' ? '进入' : '离开',
+                formatDateTime(record.createdAt)
             ];
             csvContent += row.map(cell => `"${cell}"`).join(',') + '\r\n';
         });
@@ -629,32 +605,6 @@
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-    }
-
-    // 增强时间格式化函数
-    function formatDateTime(dateInput) {
-        // 处理LeanCloud日期对象
-        if (dateInput && typeof dateInput === 'object' && dateInput.iso) {
-            dateInput = dateInput.iso;
-        }
-
-        if (!dateInput) return '-';
-        
-        try {
-            const date = new Date(dateInput);
-            if (isNaN(date.getTime())) return '无效时间';
-
-            const year = date.getFullYear();
-            const month = (date.getMonth() + 1).toString().padStart(2, '0');
-            const day = date.getDate().toString().padStart(2, '0');
-            const hours = date.getHours().toString().padStart(2, '0');
-            const minutes = date.getMinutes().toString().padStart(2, '0');
-            
-            return `${year}-${month}-${day} ${hours}:${minutes}`;
-        } catch (e) {
-            console.error('时间格式化错误:', dateInput, e);
-            return '-';
-        }
     }
 
     // 渲染原始记录表格
@@ -685,7 +635,7 @@
                 <td>${record.purpose || '-'}</td>
                 <td>${record.location || '-'}</td>
                 <td>${record.direction === 'in' ? '进入' : '离开'}</td>
-                <td>${formatDateTime(record.createdAt.iso)}</td>
+                <td>${formatDateTime(record.createdAt)}</td>
             </tr>
         `}).join('');
         
@@ -867,8 +817,14 @@
     
     // 时间格式化
     function formatDateTime(isoTime) {
-        if (!isoTime) return '-';
-        const date = new Date(isoTime);
+        // 处理LeanCloud的Date对象格式
+        let actualIso = isoTime;
+        if (isoTime && typeof isoTime === 'object' && isoTime.iso) {
+            actualIso = isoTime.iso;
+        }
+        if (!actualIso) return '-';
+        
+        const date = new Date(actualIso);
         const year = date.getFullYear();
         const month = (date.getMonth() + 1).toString().padStart(2, '0');
         const day = date.getDate().toString().padStart(2, '0');
