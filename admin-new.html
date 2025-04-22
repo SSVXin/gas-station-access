@@ -577,26 +577,26 @@
             alert('没有数据可导出');
             return;
         }
-        
+
         let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
-        
+
         // 表头
         const headerRow = ["姓名", "工号", "事由", "地点", "进出方向", "时间"];
         csvContent += headerRow.map(h => `"${h}"`).join(',') + '\r\n';
-        
+
         // 数据行
         data.forEach(record => {
             const row = [
-                record.name || '-',
-                record.employee_id || '-',
-                record.purpose || '-',
-                record.location || '-',
-                record.direction === 'in' ? '进入' : '离开',
-                formatDateTime(record.createdAt)
+                record.name || '-', // 姓名
+                record.employee_id || '-', // 工号
+                record.purpose || '-', // 事由
+                record.location || '-', // 地点
+                record.direction === 'in' ? '进入' : (record.direction === 'out' ? '离开' : '-'), // 进出方向
+                formatDateTime(record.createdAt) // 时间
             ];
             csvContent += row.map(cell => `"${cell}"`).join(',') + '\r\n';
         });
-        
+
         // 创建下载链接
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
@@ -945,4 +945,4 @@
     }
     </script>
 </body>
-</html> 
+</html>
