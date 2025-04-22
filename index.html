@@ -55,7 +55,24 @@
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
         .warning { color: red; margin: 15px 0; }
-        /* 新增的按钮样式 */
+        /* 表单元素样式 */
+        input[type="text"], select {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px; /* 移动设备上更易点击的字体大小 */
+        }
+        /* 表单标签样式 */
+        form div {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
         .submit-btn {
             width: 100%;
             padding: 15px;
@@ -69,6 +86,10 @@
             cursor: pointer;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
             transition: all 0.3s ease;
+            /* 移动设备特别优化 */
+            -webkit-appearance: none; /* 移除iOS默认按钮样式 */
+            -webkit-tap-highlight-color: transparent; /* 移除点击高亮 */
+            touch-action: manipulation; /* 优化触摸操作 */
         }
         .submit-btn:hover {
             background-color: #0056b3;
@@ -78,6 +99,28 @@
         .submit-btn:active {
             transform: translateY(1px);
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        /* 移动设备优化 */
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+                margin: 10px;
+            }
+            .submit-btn {
+                padding: 18px; /* 更大的点击区域 */
+                font-size: 20px; /* 更大的字体 */
+                margin-top: 25px; /* 与其他元素间隔更大 */
+                margin-bottom: 15px;
+            }
+            /* 表单字段在移动设备上更大 */
+            input[type="text"], select {
+                padding: 12px;
+                font-size: 18px;
+            }
+            label {
+                font-size: 16px;
+            }
         }
     </style>
 </head>
@@ -114,7 +157,7 @@
                 <!-- 隐藏的事由字段，在表单提交时使用 -->
                 <input type="hidden" name="purpose_out" id="purpose_out" value="其他">
             </div>
-            <button type="submit">登记</button>
+            <button type="submit" class="submit-btn">登 记</button>
         </form>
 
         <!-- 安全提示 -->
