@@ -442,7 +442,7 @@
         const latestStatus = new Map();
         
         // 先按时间排序，确保正确处理
-        records.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+        records.sort((a, b) => new Date(a.createdAt.iso) - new Date(b.createdAt.iso));
         
         // 处理每条记录
         for (const record of records) {
@@ -458,7 +458,7 @@
             if (record.direction === 'in') {
                 activeUsers.push({
                     ...record,
-                    duration: calculateDuration(record.createdAt, new Date().toISOString())
+                    duration: calculateDuration(record.createdAt.iso, new Date().toISOString())
                 });
             }
         }
@@ -489,7 +489,7 @@
                 <td>${user.employee_id || '-'}</td>
                 <td>${user.purpose || '-'}</td>
                 <td>${user.location || '-'}</td>
-                <td>${formatDateTime(user.createdAt)}</td>
+                <td>${formatDateTime(user.createdAt.iso)}</td>
                 <td>${user.duration || '-'}</td>
             </tr>
         `).join('');
@@ -590,7 +590,7 @@
                 record.purpose || '-',
                 record.location || '-',
                 record.direction === 'in' ? '进入' : '离开',
-                formatDateTime(record.createdAt)
+                formatDateTime(record.createdAt.iso)
             ];
             csvContent += row.map(cell => `"${cell}"`).join(',') + '\r\n';
         });
@@ -633,7 +633,7 @@
                 <td>${record.purpose || '-'}</td>
                 <td>${record.location || '-'}</td>
                 <td>${record.direction === 'in' ? '进入' : '离开'}</td>
-                <td>${formatDateTime(record.createdAt)}</td>
+                <td>${formatDateTime(record.createdAt.iso)}</td>
             </tr>
         `}).join('');
         
@@ -814,17 +814,7 @@
     // ========== 工具函数 ==========
     
     // 时间格式化
-    function formatDateTime(createdAt) {
-        // 处理LeanCloud的Date对象
-        let isoTime;
-        if (createdAt && typeof createdAt === 'object' && createdAt.__type === 'Date') {
-            isoTime = createdAt.iso;
-        } else if (typeof createdAt === 'string') {
-            isoTime = createdAt;
-        } else {
-            return '-';
-        }
-
+    function formatDateTime(isoTime) {
         if (!isoTime) return '-';
         const date = new Date(isoTime);
         const year = date.getFullYear();
