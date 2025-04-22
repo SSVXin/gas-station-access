@@ -206,10 +206,7 @@ async function loadRealTimeData() {
     const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     const response = await fetch(`${API_BASE}/1.1/classes/AccessRecord?where=${query}`, {
-      headers: { 
-        'X-LC-Id': APP_ID, 
-        'X-LC-Key': `${APP_KEY},master` 
-      },
+      headers: { 'X-LC-Id': APP_ID, 'X-LC-Key': `${APP_KEY},master` },
       signal: controller.signal
     });
     clearTimeout(timeoutId);
@@ -256,14 +253,19 @@ function calculateActiveRecords(records) {
 // 更新表格
 function updateRecordsTable(records) {
     const tbody = document.querySelector('#recordsTable tbody');
-    tbody.innerHTML = records.map(record => `
+    tbody.innerHTML = records.map(record => {
+        // 确保每个字段都有有效的值
+        const name = record.name || '-';
+        const purpose = record.purpose || '-';
+        
+        return `
         <tr>
-            <td>${record.name}</td>
-            <td>${record.purpose}</td>
+            <td>${name}</td>
+            <td>${purpose}</td>
             <td>${formatTime(record.createdAt)}</td>
             <td>${calculateDuration(record.createdAt)}</td>
         </tr>
-    `).join('');
+    `}).join('');
 }
 
 // 时间格式化
@@ -319,7 +321,15 @@ async function submitForm(e) {
         const data = await response.json();
         // 如果找到进入记录，使用进入记录的事由
         if (data.results && data.results.length > 0) {
-          formData.purpose = data.results[0].purpose || formData.purpose;
+          const inPurpose = data.results[0].purpose;
+          if (inPurpose && inPurpose !== 'undefined' && inPurpose !== 'null') {
+            console.log('找到进门事由:', inPurpose);
+            formData.purpose = inPurpose;
+          } else {
+            console.log('进门事由无效，使用默认值');
+          }
+        } else {
+          console.log('未找到对应的进门记录');
         }
       }
     } catch (error) {
@@ -327,6 +337,13 @@ async function submitForm(e) {
       // 获取失败时使用默认选择的事由，不影响后续操作
     }
   }
+
+  // 确保事由字段有值
+  if (!formData.purpose || formData.purpose === 'undefined' || formData.purpose === 'null') {
+    formData.purpose = '其他';
+  }
+
+  console.log('提交数据:', formData);
 
   // ================ 修改点2：请求配置 ================
   try {
