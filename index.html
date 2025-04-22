@@ -88,7 +88,7 @@
                 <label>事由：</label>
                 <span id="purposeDisplay" style="font-weight:bold;"></span>
                 <!-- 隐藏的事由字段，在表单提交时使用 -->
-                <input type="hidden" name="purpose" value="其他">
+                <input type="hidden" name="purpose_out" id="purpose_out" value="其他">
             </div>
             <button type="submit">登记</button>
         </form>
@@ -177,7 +177,7 @@ async function fetchAndSetPurpose(employeeId, location) {
             if (data.results && data.results.length > 0) {
                 const purpose = data.results[0].purpose || '其他';
                 // 设置隐藏的事由输入框的值
-                document.querySelector('[name="purpose"]').value = purpose;
+                document.querySelector('[name="purpose_out"]').value = purpose;
                 // 显示事由文本
                 document.getElementById('purposeDisplay').textContent = purpose;
             } else {
@@ -288,7 +288,7 @@ async function submitForm(e) {
   const formData = {
     name: e.target.name.value.trim(),
     employee_id: e.target.employee_id.value.trim(),
-    purpose: e.target.purpose.value,
+    purpose: currentDirection === 'in' ? e.target.purpose.value : document.getElementById('purpose_out').value,
     location: currentLocation,
     direction: currentDirection
   };
