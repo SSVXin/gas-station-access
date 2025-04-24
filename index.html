@@ -182,12 +182,6 @@
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- 实时人数 -->
-        <div class="stats" id="currentStats">
-            正在加载实时数据...
-        </div>
-
         <!-- 登记表单 -->
         <h2 id="locationTitle"></h2>
         <form onsubmit="submitForm(event)">
@@ -228,19 +222,6 @@
                 <li>外来人员请在管理人员带领下进入</li>
             </ol>
         </div>
-
-        <!-- 进出记录表格 -->
-        <table id="recordsTable">
-            <thead>
-                <tr>
-                    <th>姓名</th>
-                    <th>事由</th>
-                    <th>进入时间</th>
-                    <th>持续时间</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
     </div>
 
 <script>
